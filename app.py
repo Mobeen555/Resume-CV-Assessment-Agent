@@ -4,7 +4,19 @@ import re
 
 import streamlit as st
 from crewai import Agent, Crew, LLM, Process, Task
+import crewai.llms.cache as crewai_cache
 from pypdf import PdfReader
+
+
+# CrewAI 1.15.x currently adds an internal `cache_breakpoint` key to
+# messages. Groq's OpenAI-compatible API rejects that unsupported key.
+# Groq performs prompt caching automatically, so this safely prevents
+# CrewAI from adding the provider-incompatible marker.
+def _groq_safe_cache_breakpoint(message):
+    return message
+
+
+crewai_cache.mark_cache_breakpoint = _groq_safe_cache_breakpoint
 
 
 APP_TITLE = "Resume Review Agent"
@@ -206,6 +218,13 @@ def friendly_runtime_error(exc: Exception) -> str:
     message = str(exc).lower()
     name = exc.__class__.__name__.lower()
     combined = f"{name} {message}"
+
+    if "cache_breakpoint" in combined:
+        return (
+            "A CrewAI/Groq message-format compatibility issue was detected. "
+            "This build includes the Groq compatibility patch; please make sure "
+            "the latest app.py is deployed, then reboot the Streamlit app."
+        )
 
     if "rate" in combined and ("limit" in combined or "429" in combined):
         return (
